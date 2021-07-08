@@ -12,6 +12,7 @@ from tqdm import tqdm, trange
 import matplotlib.pyplot as plt
 
 from run_nerf_helpers import *
+from spacenet import SpaceNet
 
 from load_llff import load_llff_data
 from load_deepvoxels import load_dv_data
@@ -19,7 +20,7 @@ from load_blender import load_blender_data
 from load_LINEMOD import load_LINEMOD_data
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(0)
 np.random.seed(0)
 DEBUG = False
 
@@ -38,12 +39,14 @@ def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
     """Prepares inputs and applies network 'fn'.
     """
     inputs_flat = torch.reshape(inputs, [-1, inputs.shape[-1]])
-    embedded = embed_fn(inputs_flat)
+    #embedded = embed_fn(inputs_flat)
+    embedded = inputs_flat
 
     if viewdirs is not None:
         input_dirs = viewdirs[:,None].expand(inputs.shape)
         input_dirs_flat = torch.reshape(input_dirs, [-1, input_dirs.shape[-1]])
-        embedded_dirs = embeddirs_fn(input_dirs_flat)
+        #embedded_dirs = embeddirs_fn(input_dirs_flat)
+        embedded_dirs = input_dirs_flat
         embedded = torch.cat([embedded, embedded_dirs], -1)
 
     outputs_flat = batchify(fn, netchunk)(embedded)
@@ -186,16 +189,22 @@ def create_nerf(args):
         embeddirs_fn, input_ch_views = get_embedder(args.multires_views, args.i_embed)
     output_ch = 5 if args.N_importance > 0 else 4
     skips = [4]
-    model = NeRF(D=args.netdepth, W=args.netwidth,
-                 input_ch=input_ch, output_ch=output_ch, skips=skips,
-                 input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs).to(device)
+    #model = NeRF(D=args.netdepth, W=args.netwidth,
+    #             input_ch=input_ch, output_ch=output_ch, skips=skips,
+    #             input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs).to(device)
+
+    model = SpaceNet(use_viewdirs=args.use_viewdirs).to(device)
+
     grad_vars = list(model.parameters())
 
     model_fine = None
     if args.N_importance > 0:
-        model_fine = NeRF(D=args.netdepth_fine, W=args.netwidth_fine,
-                          input_ch=input_ch, output_ch=output_ch, skips=skips,
-                          input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs).to(device)
+        #model_fine = NeRF(D=args.netdepth_fine, W=args.netwidth_fine,
+        #                  input_ch=input_ch, output_ch=output_ch, skips=skips,
+        #                  input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs).to(device)
+        model_fine = SpaceNet(use_viewdirs=args.use_viewdirs).to(device)
+
+
         grad_vars += list(model_fine.parameters())
 
     network_query_fn = lambda inputs, viewdirs, network_fn : run_network(inputs, viewdirs, network_fn,
